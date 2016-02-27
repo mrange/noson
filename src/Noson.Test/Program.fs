@@ -16,66 +16,48 @@
 open System.Collections.Generic
 open System.Diagnostics
 open Noson
+open Noson.Test
+open Noson.Test.Common
+open Noson.Test.Json
 
-[<RequireQualifiedAccess>]
-type Json =
-  | Null
-  | Bool    of bool
-  | Number  of float
-  | String  of string
-  | Array   of Json []
-  | Object  of (string*Json) []
+let testPositiveTestCases () =
+  highlight "testPositiveTestCases"
 
-type JsonBuilderVisitor() =
-  let expected        = ResizeArray<int*string> ()
-  let unexpected      = ResizeArray<int*string> ()
-  let context         = Stack<(Json->unit)*(unit->Json)> ()
-  let mutable key     = ""
-
-  let push (a, d)     =
-    context.Push (a, d)
-    true
-  let pop ()          =
-    context.Count > 1 |> Debug.Assert
-    let _, d  = context.Pop ()
-    let j     = d ()
-    let a, _  = context.Peek ()
-    a j
-    true
-  let add j           =
-    context.Count > 0 |> Debug.Assert
-    let a, _  = context.Peek ()
-    a j
-    true
-
-  interface IJsonParseVisitor with
-    member x.NullValue    ()        : bool = Json.Null |> add
-    member x.BoolValue    v         : bool = Json.Bool v |> add
-    member x.NumberValue  v         : bool = Json.Number v |> add
-    member x.StringValue  v         : bool = Json.String (v.ToString ()) |> add
-    member x.ArrayBegin   ()        : bool =
-      let ab    = ResizeArray<Json> ()
-      let a j   = ab.Add j
-      let d ()  = ab.ToArray () |> Json.Array
-      push (a, d)
-    member x.ArrayEnd     ()        : bool = pop ()
-    member x.ObjectBegin  ()        : bool =
-      let ab    = ResizeArray<string*Json> ()
-      let a j   = ab.Add (key, j)
-      let d ()  = ab.ToArray () |> Json.Object
-      push (a, d)
-    member x.ObjectEnd    ()        : bool = pop ()
-    member x.MemberKey    v         : bool =
-      key = "" |> Debug.Assert
-      key <- v.ToString ()
-      true
-    member x.ExpectedChar (pos, e)  : unit =
+  for json in TestCases.positiveTestCases do
+    let result = ParseJson json
+    match result with
+    | Success v -> 
+      successf "Json: %A" v
+    | Failure (p, e, u) ->
+      errorf "Failed parsing %A: Pos: %d, Expected: %A, Unexpected: %A" json p e u
       ()
-    member x.Expected     (pos, e)  : unit =
-      ()
-    member x.Unexpected   (pos, u)  : unit =
+
+let testNegativeTestCases () =
+  highlight "testNegativeTestCases"
+
+  for json in TestCases.negativeTestCases do
+    let result = ParseJson json
+    match result with
+    | Success _ -> 
+      errorf "Expected parse failure for: %A" json
+    | Failure (p, e, u) ->
+      successf "Pos: %d, Expected: %A, Unexpected: %A" p e u
       ()
 
 [<EntryPoint>]
 let main argv =
-  0
+  try
+    testPositiveTestCases ()
+    testNegativeTestCases ()
+
+    if errors = 0 then
+      success "All tests completed successfully"
+    else
+      errorf "%d tests failed" errors
+
+    0
+  with
+  | e -> 
+    errorf "Caught exception: %s" e.Message
+    999
+  

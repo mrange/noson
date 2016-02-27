@@ -138,7 +138,15 @@ namespace Noson
       {
         throw new ArgumentException ("v : IParseVisitor must be not be null");
       }
+    }
 
+    public int Position
+    {
+      [MethodImpl (MethodImplOptions.AggressiveInlining)]
+      get
+      {
+        return position;
+      }
     }
 
     [MethodImpl (MethodImplOptions.AggressiveInlining)]
@@ -761,7 +769,7 @@ namespace Noson
 
     public bool TryParse ()
     {
-      return TryParse_RootValue () && TryParse_Eos ();
+      return Consume_WhiteSpace () && TryParse_RootValue () && TryParse_Eos ();
     }
   }
 
