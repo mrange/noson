@@ -22,4 +22,8 @@ namespace Noson
   public partial class JsonParser
   {
   }
+
+  public partial class JsonWriter
+  {
+  }
 }

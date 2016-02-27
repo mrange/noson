@@ -115,3 +115,12 @@ let ParseJson (json : string) : ParseJsonResult =
     let p     = parser.Position
     let e, u  = visitor.Errors p
     Failure (p, "Failed to parse JSON", e, u)
+
+let Roundtrip (json : string) : string option =
+  let visitor = JsonWriter false
+  let parser  = JsonParser (json, visitor)
+  if parser.TryParse () then
+    visitor.Json |> Some
+  else
+    None
+  

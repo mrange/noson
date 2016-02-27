@@ -26,12 +26,17 @@ let testPositiveTestCases () =
   for json in TestCases.positiveTestCases do
     let expected  = ReferenceParser.ParseJson json
     let actual    = ParseJson json
-    match expected, actual with
-    | Success e, Success a when e = a -> 
-      ()
-    | _ , Success _ -> 
+    let roundtrip = Roundtrip json
+    match expected, actual, roundtrip with
+    | Success e, Success a, Some rt when e = a -> 
+      match ReferenceParser.ParseJson rt with
+      | Success prt when e = prt -> 
+        ()
+      | _ ->
+        errorf "Expected and roundtrip result doesn't match for %A and roundtrip %A" json roundtrip
+    | _ , Success _, _ -> 
       errorf "Expected and actual parse result doesn't match for %A: %A <> %A" json expected actual
-    | _ , Failure (p, _, e, u) ->
+    | _ , Failure (p, _, e, u), _ ->
       errorf "Failed parsing %A: Pos: %d, Expected: %A, Unexpected: %A" json p e u
 
 let testNegativeTestCases () =
@@ -43,7 +48,6 @@ let testNegativeTestCases () =
     | Success _ -> 
       errorf "Expected parse failure for: %A" json
     | Failure (p, _, e, u) ->
-      successf "Pos: %d, Expected: %A, Unexpected: %A" p e u
       ()
 
 [<EntryPoint>]

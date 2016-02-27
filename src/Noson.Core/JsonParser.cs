@@ -18,6 +18,7 @@ namespace Noson.Details
   using System;
   using System.Globalization;
   using System.Linq;
+  using System.Runtime.CompilerServices;
 
   static partial class Common
   {
@@ -51,7 +52,7 @@ namespace Noson.Details
               case '\n':  return @"\n";
               case '\r':  return @"\r";
               case '\t':  return @"\t";
-              default:    return @"\u{0:04X}".FormatWith (i);
+              default:    return @"\u{0:X4}".FormatWith (i);
             }
           })
         .ToArray ()
@@ -67,9 +68,10 @@ namespace Noson.Details
         ;
     }
 
-    static readonly string [] NonPrintableChars   = CreateNonPrintableChars ();
-    static readonly double [] Pow10Table          = CreatePow10Table ();
+    public static readonly string [] NonPrintableChars   = CreateNonPrintableChars ();
+    public static readonly double [] Pow10Table          = CreatePow10Table ();
 
+    [MethodImpl (MethodImplOptions.AggressiveInlining)]
     public static double Pow10 (int e)
     {
       if (e < MinimumPow10)
@@ -97,12 +99,13 @@ namespace Noson.Details
 namespace Noson
 {
   using System;
+  using System.Collections.Generic;
   using System.Diagnostics;
+  using System.Globalization;
   using System.Runtime.CompilerServices;
   using System.Text;
 
   using Noson.Details;
-
   partial interface IJsonParseVisitor
   {
     bool NullValue    ();
@@ -119,7 +122,7 @@ namespace Noson
     void Unexpected   (int pos, string  u);
   }
 
-  partial class JsonParser
+  sealed partial class JsonParser
   {
     readonly string             input         ;
     readonly IJsonParseVisitor  visitor       ;
@@ -773,11 +776,203 @@ namespace Noson
     }
   }
 
-  static partial class Json
+  sealed partial class JsonWriter : IJsonParseVisitor
   {
-    public static dynamic ToDynamic (string json)
+    class Context
     {
-      return null;
+      public bool     IsFirst = true;
+      public string   Key     = null;
+    }
+
+    readonly bool           indent    ;
+    readonly StringBuilder  json      = new StringBuilder (Common.DefaultSize);
+    readonly Stack<Context> contexts  = new Stack<Context> (Common.DefaultSize);
+
+    public JsonWriter (bool i)
+    {
+      indent = i;
+      Push ();
+    }
+
+    public string Json
+    {
+      get
+      {
+        return json.ToString ();
+      }
+    }
+
+    [MethodImpl (MethodImplOptions.AggressiveInlining)]
+    void Push ()
+    {
+      contexts.Push (new Context ());
+    }
+
+    [MethodImpl (MethodImplOptions.AggressiveInlining)]
+    void Pop ()
+    {
+      Debug.Assert (contexts.Count > 0);
+      contexts.Pop ();
+    }
+
+    [MethodImpl (MethodImplOptions.AggressiveInlining)]
+    void PushMemberKey (string key)
+    {
+      Debug.Assert (contexts.Count > 0);
+      var context = contexts.Peek ();
+      context.Key = key;
+    }
+
+    void Char (char ch)
+    {
+      //TODO: For what values do we escape with \u0000
+      switch (ch)
+      {
+        case '\\':
+          json.Append (@"\\");
+          break;
+        case '/':
+          json.Append (@"\/");
+          break;
+        case '"':
+          json.Append (@"\""");
+          break;
+        default:
+          if (ch < Common.NonPrintableChars.Length)
+          {
+            json.Append (Common.NonPrintableChars[ch]);
+          }
+          else
+          {
+            json.Append (ch);
+          }
+          break;
+      }
+    }
+
+    [MethodImpl (MethodImplOptions.AggressiveInlining)]
+    void Value ()
+    {
+      Debug.Assert (contexts.Count > 0);
+      var c = contexts.Peek ();
+      if (c.IsFirst)
+      {
+        c.IsFirst = false;
+      }
+      else
+      {
+        json.Append (',');
+      }
+
+      if (c.Key != null)
+      {
+        json.Append ('"');
+        foreach (var ch in c.Key)
+        {
+          Char (ch);
+        }
+        json.Append ('"');
+        json.Append (':');
+
+        c.Key = null;
+      }
+    }
+
+    public bool ArrayBegin ()
+    {
+      Value ();
+      Push ();
+      json.Append ('[');
+      return true;
+    }
+
+    public bool ArrayEnd ()
+    {
+      json.Append (']');
+      Pop ();
+      return true;
+    }
+
+    public bool BoolValue (bool v)
+    {
+      Value ();
+      json.Append (v ? "true" : "false");
+      return true;
+    }
+
+    public void Expected (int pos, string e)
+    {
+    }
+
+    public void ExpectedChar (int pos, char e)
+    {
+    }
+
+    public bool MemberKey (StringBuilder v)
+    {
+      PushMemberKey (v.ToString ());
+      return true;
+    }
+
+    public bool NullValue ()
+    {
+      Value ();
+      json.Append ("null");
+      return true;
+    }
+
+    public bool NumberValue(double v)
+    {
+      Value ();
+      if (double.IsPositiveInfinity (v))
+      {
+        json.AppendFormat ("1E309");  // Json doesn't support Infinity
+      }
+      else if (double.IsNegativeInfinity (v))
+      {
+        json.AppendFormat ("-1E309");  // Json doesn't support Infinity
+      }
+      else if (double.IsNaN (v))
+      {
+        json.AppendFormat ("0");  // Json doesn't support Nan
+      }
+      else
+      {
+        json.AppendFormat (CultureInfo.InvariantCulture, "{0:g}", v);
+      }
+      return true;
+    }
+
+    public bool ObjectBegin()
+    {
+      Value ();
+      Push ();
+      json.Append ('{');
+      return true;
+    }
+
+    public bool ObjectEnd()
+    {
+      json.Append ('}');
+      Pop ();
+      return true;
+    }
+
+    public bool StringValue(StringBuilder v)
+    {
+      Value ();
+      json.Append ('"');
+      var count = v.Length;
+      for (var iter = 0; iter < count; ++iter)
+      {
+        Char (v[iter]);
+      }
+      json.Append ('"');
+      return true;
+    }
+
+    public void Unexpected(int pos, string u)
+    {
     }
   }
 
