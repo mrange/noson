@@ -43,7 +43,7 @@ let positiveTestCases =
     """["\u0123\u4567\u89AB\uCDEF"]"""
     """["\u0123\u4567\u89ab\ucdef"]"""
     """[false,true,null]"""
-    """[ false ,true, null ]"""
+    """ [ false ,true, null ] """
     """[[], null, [true]]"""
     """{"abc":123}"""
     """{"abc" :123}"""

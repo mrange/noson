@@ -33,22 +33,22 @@ type Json =
 type JsonBuilderVisitor() =
   let expected        = ResizeArray<int*string> ()
   let unexpected      = ResizeArray<int*string> ()
-  let context         = Stack<(Json->unit)*(unit->Json)> ()
-  let mutable key     = ""
+  let context         = Stack<string ref*(Json->unit)*(unit->Json)> ()
+  let dummy           = ref ""
 
-  let push (a, d)     =
-    context.Push (a, d)
+  let push (rk, a, d)     =
+    context.Push (rk, a, d)
     true
   let pop ()          =
     context.Count > 1 |> Debug.Assert
-    let _, d  = context.Pop ()
+    let _, _, d  = context.Pop ()
     let j     = d ()
-    let a, _  = context.Peek ()
+    let _, a, _  = context.Peek ()
     a j
     true
   let add j           =
     context.Count > 0 |> Debug.Assert
-    let a, _  = context.Peek ()
+    let _, a, _  = context.Peek ()
     a j
     true
 
@@ -56,25 +56,30 @@ type JsonBuilderVisitor() =
       let ab    = ResizeArray<Json> ()
       let a j   = ab.Add j
       let d ()  = ab.ToArray () |> Json.Array
-      push (a, d)
+      push (dummy, a, d)
 
   let pushObject () =
+    let rk    = ref ""
     let ab    = ResizeArray<string*Json> ()
-    let a j   = ab.Add (key, j)
+    let a j   = ab.Add (!rk, j)
     let d ()  = ab.ToArray () |> Json.Object
-    push (a, d)
+    push (rk, a, d)
 
-  let pushMemberKey (v : StringBuilder) =
-    key = "" |> Debug.Assert
-    key <- v.ToString ()
+  let setMemberKey (v : StringBuilder) =
+    context.Count > 0 |> Debug.Assert
+    let rkey, _, _ = context.Peek ()
+    rkey := v.ToString ()
     true
 
   do
-    pushObject () |> ignore
+    let rroot = ref Json.Null
+    let a j   = rroot := j
+    let d ()  = !rroot
+    push (dummy, a, d) |> ignore
 
   member x.Value : Json =
     context.Count = 1 |> Debug.Assert 
-    let _, d = context.Peek ()
+    let _, _, d = context.Peek ()
     d ()
 
   member x.Errors (pos : int) : string [] * string [] =
@@ -92,7 +97,7 @@ type JsonBuilderVisitor() =
     member x.ArrayEnd     ()        : bool = pop ()
     member x.ObjectBegin  ()        : bool = pushObject ()
     member x.ObjectEnd    ()        : bool = pop ()
-    member x.MemberKey    v         : bool = pushMemberKey v
+    member x.MemberKey    v         : bool = setMemberKey v
     member x.ExpectedChar (pos, e)  : unit = expected.Add (pos, sprintf "'%c'" e)
     member x.Expected     (pos, e)  : unit = expected.Add (pos, e)
     member x.Unexpected   (pos, u)  : unit = unexpected.Add (pos, u)
