@@ -1,4 +1,19 @@
-﻿namespace Noson.Details
+﻿// ----------------------------------------------------------------------------------------------
+// Copyright 2015 Mårten Rånge
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// ----------------------------------------------------------------------------------------------
+namespace Noson.Details
 {
   using System;
   using System.Globalization;
@@ -99,9 +114,9 @@ namespace Noson
     bool ObjectBegin  ();
     bool ObjectEnd    ();
     bool MemberKey    (StringBuilder    v);
-    void ExpectedChar (int pos, char    e); 
-    void Expected     (int pos, string  e); 
-    void Unexpected   (int pos, string  u); 
+    void ExpectedChar (int pos, char    e);
+    void Expected     (int pos, string  e);
+    void Unexpected   (int pos, string  u);
   }
 
   partial class JsonParser
@@ -374,7 +389,7 @@ namespace Noson
       while (!Test_Char (']'))
       {
         if (!(
-              TryParse_Delimiter(first) 
+              TryParse_Delimiter(first)
           &&  TryParse_Value ())
           )
         {
@@ -389,7 +404,7 @@ namespace Noson
 
     bool TryParse_Array ()
     {
-      return 
+      return
             TryConsume_Char ('[')
         &&  Consume_WhiteSpace ()
         &&  visitor.ArrayBegin ()
@@ -406,7 +421,7 @@ namespace Noson
       while (!Test_Char ('}'))
       {
         if (!(
-              TryParse_Delimiter(first) 
+              TryParse_Delimiter(first)
           &&  TryParse_MemberKey ()
           &&  Consume_WhiteSpace ()
           &&  TryConsume_Char (':')
@@ -425,7 +440,7 @@ namespace Noson
 
     bool TryParse_Object ()
     {
-      return 
+      return
             TryConsume_Char ('{')
         &&  Consume_WhiteSpace ()
         &&  visitor.ObjectBegin ()
@@ -559,7 +574,7 @@ namespace Noson
     bool TryParse_ToStringBuilder ()
     {
       stringBuilder.Clear ();
-      return 
+      return
             TryConsume_Char ('"')
         &&  TryParse_Chars  ()
         &&  TryConsume_Char ('"')
@@ -568,7 +583,7 @@ namespace Noson
 
     bool TryParse_String ()
     {
-      return 
+      return
             TryParse_ToStringBuilder ()
         &&  visitor.StringValue (stringBuilder)
         ;
@@ -576,7 +591,7 @@ namespace Noson
 
     bool TryParse_MemberKey ()
     {
-      return 
+      return
             TryParse_ToStringBuilder ()
         &&  visitor.MemberKey (stringBuilder)
         ;
@@ -686,7 +701,7 @@ namespace Noson
       double f;
       double e;
 
-      return 
+      return
             TryParse_UInt0    (out i)
         &&  TryParse_Fraction (out f)
         &&  TryParse_Exponent (out e)

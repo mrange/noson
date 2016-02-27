@@ -9,6 +9,13 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Noson.Core", "Noson.Core\No
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Noson.Test", "Noson.Test\Noson.Test.fsproj", "{6ED38FE0-FAD1-4B59-BDC8-3BC4F517F527}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{B8D844D8-4F96-4FD6-A35A-A95A39969B80}"
+	ProjectSection(SolutionItems) = preProject
+		..\.gitignore = ..\.gitignore
+		..\LICENSE = ..\LICENSE
+		..\README.md = ..\README.md
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
