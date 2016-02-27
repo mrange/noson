@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 // ----------------------------------------------------------------------------------------------
-module Noson.Test.Json
+module Noson.Test.JsonParser
 
 open System.Collections.Generic
 open System.Diagnostics
@@ -104,7 +104,7 @@ type JsonBuilderVisitor() =
 
 type ParseJsonResult =
   | Success of Json
-  | Failure of int*string []*string []
+  | Failure of int*string*string []*string []
 
 let ParseJson (json : string) : ParseJsonResult =
   let visitor = JsonBuilderVisitor ()
@@ -114,4 +114,4 @@ let ParseJson (json : string) : ParseJsonResult =
   else
     let p     = parser.Position
     let e, u  = visitor.Errors p
-    Failure (p, e, u)
+    Failure (p, "Failed to parse JSON", e, u)

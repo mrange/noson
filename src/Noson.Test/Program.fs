@@ -18,19 +18,21 @@ open System.Diagnostics
 open Noson
 open Noson.Test
 open Noson.Test.Common
-open Noson.Test.Json
+open Noson.Test.JsonParser
 
 let testPositiveTestCases () =
   highlight "testPositiveTestCases"
 
   for json in TestCases.positiveTestCases do
-    let result = ParseJson json
-    match result with
-    | Success v -> 
-      successf "Json: %A" v
-    | Failure (p, e, u) ->
-      errorf "Failed parsing %A: Pos: %d, Expected: %A, Unexpected: %A" json p e u
+    let expected  = ReferenceParser.ParseJson json
+    let actual    = ParseJson json
+    match expected, actual with
+    | Success e, Success a when e = a -> 
       ()
+    | _ , Success _ -> 
+      errorf "Expected and actual parse result doesn't match for %A: %A <> %A" json expected actual
+    | _ , Failure (p, _, e, u) ->
+      errorf "Failed parsing %A: Pos: %d, Expected: %A, Unexpected: %A" json p e u
 
 let testNegativeTestCases () =
   highlight "testNegativeTestCases"
@@ -40,7 +42,7 @@ let testNegativeTestCases () =
     match result with
     | Success _ -> 
       errorf "Expected parse failure for: %A" json
-    | Failure (p, e, u) ->
+    | Failure (p, _, e, u) ->
       successf "Pos: %d, Expected: %A, Unexpected: %A" p e u
       ()
 
