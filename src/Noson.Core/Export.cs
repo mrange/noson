@@ -15,7 +15,11 @@
 // ----------------------------------------------------------------------------------------------
 namespace Noson
 {
-  public partial interface IJsonParseVisitor
+  public partial interface IJsonVisitor
+  {
+  }
+
+  public partial interface IJsonHierarchy
   {
   }
 
@@ -23,15 +27,19 @@ namespace Noson
   {
   }
 
+  public partial class ErrorWriter
+  {
+  }
+
   public partial class JsonWriter
   {
   }
 
-  public partial class Json
+  public partial class JsonValue
   {
   }
 
-  public partial class Tools
+  public partial class Json
   {
   }
 }

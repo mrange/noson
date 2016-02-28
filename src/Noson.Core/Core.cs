@@ -24,6 +24,8 @@ namespace Noson.Details
   {
     public const int    DefaultSize               = 64            ;
 
+    public const string ErrorPrelude              = "Failed to parse input as JSON";
+
     public const string Null                      = "null"        ;
     public const string True                      = "true"        ;
     public const string False                     = "false"       ;
@@ -102,36 +104,60 @@ namespace Noson
   using System.Collections.Generic;
   using System.Diagnostics;
   using System.Globalization;
+  using System.Linq;
   using System.Runtime.CompilerServices;
   using System.Text;
 
   using Noson.Details;
-  partial interface IJsonParseVisitor
+
+  partial interface IJsonVisitor
   {
     bool NullValue    ();
     bool BoolValue    (bool             v);
     bool NumberValue  (double           v);
     bool StringValue  (StringBuilder    v);
+    bool StringValue  (string           v);
     bool ArrayBegin   ();
     bool ArrayEnd     ();
     bool ObjectBegin  ();
     bool ObjectEnd    ();
     bool MemberKey    (StringBuilder    v);
+    bool MemberKey    (string           v);
     void ExpectedChar (int pos, char    e);
     void Expected     (int pos, string  e);
     void Unexpected   (int pos, string  u);
   }
 
+  partial interface IJsonHierarchy
+  {
+    void Apply (IJsonVisitor v);
+  }
+
+  static partial class JsonParseVisitor
+  {
+    public static void ExpectedChars (this IJsonVisitor v, int pos, string e)
+    {
+      Debug.Assert (v != null);
+      Debug.Assert (e != null);
+
+      // TODO: This should be optimized into 1 call
+      foreach (var ch in e)
+      {
+        v.ExpectedChar (pos, ch);
+      }
+    }
+  }
+
   sealed partial class JsonParser
   {
     readonly string             input         ;
-    readonly IJsonParseVisitor  visitor       ;
+    readonly IJsonVisitor  visitor       ;
 
     readonly StringBuilder      stringBuilder ;
 
     int                         position      ;
 
-    public JsonParser (string i, IJsonParseVisitor v)
+    public JsonParser (string i, IJsonVisitor v)
     {
       input         = i ?? ""                               ;
       visitor       = v                                     ;
@@ -155,14 +181,14 @@ namespace Noson
     [MethodImpl (MethodImplOptions.AggressiveInlining)]
     bool NotEos ()
     {
-      // Faster to prefect length?
+      // TODO: Faster to prefetch length?
       return position < input.Length;
     }
 
     [MethodImpl (MethodImplOptions.AggressiveInlining)]
     bool Eos ()
     {
-      // Faster to prefect length?
+      // TODO: Faster to prefetch length?
       return position >= input.Length;
     }
 
@@ -200,17 +226,17 @@ namespace Noson
 
     bool Raise_Value ()
     {
-      visitor.Expected (position, Common.Null         );
-      visitor.Expected (position, Common.True         );
-      visitor.Expected (position, Common.False        );
-      visitor.Expected (position, Common.Digit        );
-      visitor.Expected (position, Common.ValuePreludes);
+      visitor.Expected      (position, Common.Null         );
+      visitor.Expected      (position, Common.True         );
+      visitor.Expected      (position, Common.False        );
+      visitor.Expected      (position, Common.Digit        );
+      visitor.ExpectedChars (position, Common.ValuePreludes);
       return false;
     }
 
     bool Raise_RootValue ()
     {
-      visitor.Expected (position, Common.RootValuePreludes);
+      visitor.ExpectedChars (position, Common.RootValuePreludes);
       return false;
     }
 
@@ -234,7 +260,7 @@ namespace Noson
 
     bool Raise_Escapes ()
     {
-      visitor.Expected (position, Common.Escapes);
+      visitor.ExpectedChars (position, Common.Escapes);
       return false;
     }
 
@@ -776,7 +802,7 @@ namespace Noson
     }
   }
 
-  sealed partial class JsonWriter : IJsonParseVisitor
+  sealed partial class JsonWriter : IJsonVisitor
   {
     class Context
     {
@@ -793,7 +819,7 @@ namespace Noson
       Push ();
     }
 
-    public string Json
+    public string Value
     {
       get
       {
@@ -851,7 +877,7 @@ namespace Noson
     }
 
     [MethodImpl (MethodImplOptions.AggressiveInlining)]
-    void Value ()
+    void JsonValue ()
     {
       Debug.Assert (contexts.Count > 0);
       var c = contexts.Peek ();
@@ -880,7 +906,7 @@ namespace Noson
 
     public bool ArrayBegin ()
     {
-      Value ();
+      JsonValue ();
       Push ();
       json.Append ('[');
       return true;
@@ -895,7 +921,7 @@ namespace Noson
 
     public bool BoolValue (bool v)
     {
-      Value ();
+      JsonValue ();
       json.Append (v ? "true" : "false");
       return true;
     }
@@ -914,16 +940,22 @@ namespace Noson
       return true;
     }
 
+    public bool MemberKey (string v)
+    {
+      PushMemberKey (v);
+      return true;
+    }
+
     public bool NullValue ()
     {
-      Value ();
+      JsonValue ();
       json.Append ("null");
       return true;
     }
 
     public bool NumberValue (double v)
     {
-      Value ();
+      JsonValue ();
       if (double.IsPositiveInfinity (v))
       {
         json.AppendFormat (@"""Infinity""");  // Json doesn't support Infinity number literal
@@ -945,7 +977,7 @@ namespace Noson
 
     public bool ObjectBegin ()
     {
-      Value ();
+      JsonValue ();
       Push ();
       json.Append ('{');
       return true;
@@ -960,7 +992,7 @@ namespace Noson
 
     public bool StringValue (StringBuilder v)
     {
-      Value ();
+      JsonValue ();
       json.Append ('"');
       var count = v.Length;
       for (var iter = 0; iter < count; ++iter)
@@ -971,14 +1003,187 @@ namespace Noson
       return true;
     }
 
+    public bool StringValue (string v)
+    {
+      JsonValue ();
+      json.Append ('"');
+      foreach (var ch in v)
+      {
+        Char (ch);
+      }
+      json.Append ('"');
+      return true;
+    }
+
     public void Unexpected (int pos, string u)
     {
     }
   }
 
-  static partial class Tools
+  sealed partial class ErrorWriter : IJsonVisitor
   {
+    readonly List<string> expected      = new List<string> (Common.DefaultSize);
+    readonly List<char>   expectedChar  = new List<char> (Common.DefaultSize);
+    readonly List<string> unexpected    = new List<string> (Common.DefaultSize);
+
+    readonly int          position;
+
+    public ErrorWriter (int pos)
+    {
+      Debug.Assert (pos > -1);
+      position = pos;
+    }
+
+    static void Append (string prefix, StringBuilder sb, string[] values)
+    {
+      if (values.Length > 0)
+      {
+        sb.AppendLine ();
+        sb.Append ("Expected:");
+        for (var iter = 0; iter < values.Length; ++iter)
+        {
+          if (iter == 0)
+          {
+          }
+          else if (iter == values.Length - 1)
+          {
+            sb.Append (" or ");
+          }
+          else
+          {
+            sb.Append (", ");
+          }
+
+          sb.Append (values[iter]);
+        }
+      }
+    }
+
+    public string Value
+    {
+      get
+      {
+        var sb = new StringBuilder (Common.DefaultSize);
+
+        sb.Append (Common.ErrorPrelude);
+
+        sb.AppendLine ();
+        sb.AppendFormat ("@Pos: {0}", position);
+
+        var exp = expectedChar
+          .Distinct ()
+          .Select (c => "'" + c + "'")
+          .Concat (expected)
+          .Distinct ()
+          .OrderBy (e => e)
+          .ToArray ()
+          ;
+
+        var unexp = unexpected
+          .Distinct ()
+          .OrderBy (e => e)
+          .ToArray ()
+          ;
+
+        Append ("Expected: ", sb, exp);
+        Append ("Unexpected: ", sb, unexp);
+
+        return sb.ToString ();
+      }
+    }
+
+    public bool NullValue ()
+    {
+      return true;
+    }
+
+    public bool BoolValue (bool v)
+    {
+      return true;
+    }
+
+    public bool NumberValue (double v)
+    {
+      return true;
+    }
+
+    public bool StringValue (StringBuilder v)
+    {
+      return true;
+    }
+
+    public bool StringValue (string v)
+    {
+      return true;
+    }
+
+    public bool ArrayBegin ()
+    {
+      return true;
+    }
+
+    public bool ArrayEnd ()
+    {
+      return true;
+    }
+
+    public bool ObjectBegin ()
+    {
+      return true;
+    }
+
+    public bool ObjectEnd ()
+    {
+      return true;
+    }
+
+    public bool MemberKey (StringBuilder v)
+    {
+      return true;
+    }
+
+    public bool MemberKey (string v)
+    {
+      return true;
+    }
+
+    public void ExpectedChar (int pos, char e)
+    {
+      if (pos == position)
+      {
+        expectedChar.Add (e);
+      }
+    }
+
+    public void Expected     (int pos, string e)
+    {
+      if (pos == position)
+      {
+        expected.Add (e);
+      }
+    }
+
+    public void Unexpected   (int pos, string u)
+    {
+      if (pos == position)
+      {
+        unexpected.Add (u);
+      }
+    }
+  }
+
+  static partial class Json
+  {
+    public static string ToString (IJsonHierarchy hierarchy)
+    {
+      if (hierarchy == null)
+      {
+        return "[]";
+      }
+
+      var visitor = new JsonWriter (false);
+      hierarchy.Apply (visitor);
+      return visitor.Value;
+    }
   }
 }
-
-

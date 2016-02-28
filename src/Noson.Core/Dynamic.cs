@@ -25,7 +25,7 @@ namespace Noson
 
   using Details;
 
-  abstract partial class Json : DynamicObject
+  abstract partial class JsonValue : DynamicObject, IJsonHierarchy
   {
     public const double NoNumber    = double.NaN;
     public const string MissingKey  = "";
@@ -60,7 +60,7 @@ namespace Noson
 
     public override bool TryGetMember (GetMemberBinder binder, out object result)
     {
-      result = GetMember (binder.Name);  
+      result = GetMember (binder.Name);
       return true;
     }
 
@@ -71,7 +71,7 @@ namespace Noson
         var index = indexes[0];
         if (index is string)
         {
-          result = GetMember ((string)index);  
+          result = GetMember ((string)index);
           return true;
         }
         else if (index is int)
@@ -82,14 +82,16 @@ namespace Noson
         }
         else
         {
-          return base.TryGetIndex(binder, indexes, out result); 
+          return base.TryGetIndex(binder, indexes, out result);
         }
       }
       else
       {
-        return base.TryGetIndex(binder, indexes, out result); 
+        return base.TryGetIndex(binder, indexes, out result);
       }
     }
+
+    public abstract void      Apply (IJsonVisitor visitor);
 
     public abstract bool      IsValid ();
 
@@ -98,9 +100,9 @@ namespace Noson
     public abstract string    AsString ();
     public abstract object[]  AsObjectArray ();
 
-    public abstract Json      GetMember (string name);
+    public abstract JsonValue      GetMember (string name);
     public abstract string    GetKey (int i);
-    public abstract Json      GetValue (int i);
+    public abstract JsonValue      GetValue (int i);
     public abstract int       GetCount ();
 
     public override string    ToString ()
@@ -109,7 +111,7 @@ namespace Noson
     }
   }
 
-  abstract partial class JsonScalar : Json
+  abstract partial class JsonScalarValue : JsonValue
   {
     public override bool IsValid ()
     {
@@ -121,9 +123,9 @@ namespace Noson
       return new object [] { this };
     }
 
-    public override Json GetMember (string name)
+    public override JsonValue GetMember (string name)
     {
-      return JsonMissing.Value;
+      return JsonMissingValue.Value;
     }
 
     public override string GetKey (int i)
@@ -131,9 +133,9 @@ namespace Noson
       return MissingKey;
     }
 
-    public override Json GetValue (int i)
+    public override JsonValue GetValue (int i)
     {
-      return i == 0 ? this : JsonMissing.Value;
+      return i == 0 ? this : JsonMissingValue.Value;
     }
 
     public override int GetCount ()
@@ -142,7 +144,7 @@ namespace Noson
     }
   }
 
-  abstract partial class JsonVector : Json
+  abstract partial class JsonVectorValue : JsonValue
   {
     public override bool IsValid ()
     {
@@ -155,9 +157,14 @@ namespace Noson
     }
   }
 
-  sealed partial class JsonMissing : Json
+  sealed partial class JsonMissingValue : JsonValue
   {
-    public readonly static Json Value = new JsonMissing ();
+    public readonly static JsonValue Value = new JsonMissingValue ();
+
+    public override void Apply(IJsonVisitor visitor)
+    {
+      Debug.Assert (visitor != null);
+    }
 
     public override bool IsValid ()
     {
@@ -194,20 +201,26 @@ namespace Noson
       return MissingKey;
     }
 
-    public override Json GetValue (int i)
+    public override JsonValue GetValue (int i)
     {
       return Value;
     }
 
-    public override Json GetMember (string name)
+    public override JsonValue GetMember (string name)
     {
       return Value;
     }
   }
 
-  sealed partial class JsonNull : JsonScalar
+  sealed partial class JsonNullValue : JsonScalarValue
   {
-    public readonly static Json Value = new JsonNull ();
+    public readonly static JsonValue Value = new JsonNullValue ();
+
+    public override void Apply(IJsonVisitor visitor)
+    {
+      Debug.Assert (visitor != null);
+      visitor.NullValue ();
+    }
 
     public override bool AsBoolean ()
     {
@@ -225,16 +238,22 @@ namespace Noson
     }
   }
 
-  sealed partial class JsonBool : JsonScalar
+  sealed partial class JsonBooleanValue : JsonScalarValue
   {
-    public readonly static Json True  = new JsonBool (true);
-    public readonly static Json False = new JsonBool (false);
+    public readonly static JsonValue True  = new JsonBooleanValue (true);
+    public readonly static JsonValue False = new JsonBooleanValue (false);
 
     bool value;
 
-    public JsonBool (bool v)
+    public JsonBooleanValue (bool v)
     {
       value = v;
+    }
+
+    public override void Apply(IJsonVisitor visitor)
+    {
+      Debug.Assert (visitor != null);
+      visitor.BoolValue (value);
     }
 
     public override bool AsBoolean ()
@@ -253,13 +272,19 @@ namespace Noson
     }
   }
 
-  sealed partial class JsonNumber : JsonScalar
+  sealed partial class JsonNumberValue : JsonScalarValue
   {
     double value;
 
-    public JsonNumber (double v)
+    public JsonNumberValue (double v)
     {
       value = v;
+    }
+
+    public override void Apply(IJsonVisitor visitor)
+    {
+      Debug.Assert (visitor != null);
+      visitor.NumberValue (value);
     }
 
     public override bool AsBoolean ()
@@ -278,13 +303,19 @@ namespace Noson
     }
   }
 
-  sealed partial class JsonString : JsonScalar
+  sealed partial class JsonStringValue : JsonScalarValue
   {
     string value;
 
-    public JsonString (string v)
+    public JsonStringValue (string v)
     {
       value = v ?? "";
+    }
+
+    public override void Apply(IJsonVisitor visitor)
+    {
+      Debug.Assert (visitor != null);
+      visitor.StringValue (value);
     }
 
     public override bool AsBoolean ()
@@ -311,13 +342,25 @@ namespace Noson
     }
   }
 
-  sealed partial class JsonArray : JsonVector
+  sealed partial class JsonArrayValue : JsonVectorValue
   {
-    List<Json> value;
+    List<JsonValue> value;
 
-    public JsonArray (List<Json> v)
+    public JsonArrayValue (List<JsonValue> v)
     {
-      value = v ?? new List<Json> ();
+      value = v ?? new List<JsonValue> ();
+    }
+
+    public override void Apply (IJsonVisitor visitor)
+    {
+      Debug.Assert (visitor != null);
+      visitor.ArrayBegin ();
+      var count = value.Count;
+      for (var iter = 0; iter < count; ++iter)
+      {
+        value[iter].Apply (visitor);
+      }
+      visitor.ArrayEnd ();
     }
 
     public override bool AsBoolean ()
@@ -340,9 +383,9 @@ namespace Noson
       return "{0}".FormatWith (value.Count);
     }
 
-    public override Json GetMember (string name)
+    public override JsonValue GetMember (string name)
     {
-      return JsonMissing.Value;
+      return JsonMissingValue.Value;
     }
 
     public override string GetKey (int i)
@@ -350,7 +393,7 @@ namespace Noson
       return MissingKey;
     }
 
-    public override Json GetValue (int i)
+    public override JsonValue GetValue (int i)
     {
       if (i > -1 && i < value.Count)
       {
@@ -358,7 +401,7 @@ namespace Noson
       }
       else
       {
-        return JsonMissing.Value;
+        return JsonMissingValue.Value;
       }
     }
 
@@ -368,13 +411,27 @@ namespace Noson
     }
   }
 
-  sealed partial class JsonObject : JsonVector
+  sealed partial class JsonObjectValue : JsonVectorValue
   {
-    List<Tuple<string, Json>> value;
+    List<Tuple<string, JsonValue>> value;
 
-    public JsonObject (List<Tuple<string, Json>> v)
+    public JsonObjectValue (List<Tuple<string, JsonValue>> v)
     {
-      value = v ?? new List<Tuple<string, Json>> ();
+      value = v ?? new List<Tuple<string, JsonValue>> ();
+    }
+
+    public override void Apply (IJsonVisitor visitor)
+    {
+      Debug.Assert (visitor != null);
+      visitor.ObjectBegin ();
+      var count = value.Count;
+      for (var iter = 0; iter < count; ++iter)
+      {
+        var v = value[iter];
+        visitor.MemberKey (v.Item1);
+        v.Item2.Apply (visitor);
+      }
+      visitor.ObjectEnd ();
     }
 
     public override bool AsBoolean ()
@@ -397,7 +454,7 @@ namespace Noson
       return "{0}".FormatWith (value.Count);
     }
 
-    public override Json GetMember (string name)
+    public override JsonValue GetMember (string name)
     {
       foreach (var kv in value)
       {
@@ -407,7 +464,7 @@ namespace Noson
         }
       }
 
-      return JsonMissing.Value;
+      return JsonMissingValue.Value;
     }
 
     public override string GetKey (int i)
@@ -422,7 +479,7 @@ namespace Noson
       }
     }
 
-    public override Json GetValue (int i)
+    public override JsonValue GetValue (int i)
     {
       if (i > -1 && i < value.Count)
       {
@@ -430,7 +487,7 @@ namespace Noson
       }
       else
       {
-        return JsonMissing.Value;
+        return JsonMissingValue.Value;
       }
     }
 
@@ -440,29 +497,29 @@ namespace Noson
     }
   }
 
-  sealed partial class JsonBuilderVisitor : IJsonParseVisitor
+  sealed partial class JsonBuilderVisitor : IJsonVisitor
   {
     abstract partial class BaseContext
     {
-      public abstract Json CreateJson ();
+      public abstract JsonValue CreateJson ();
 
-      public abstract void Append (Json json);
+      public abstract void Append (JsonValue json);
 
       public abstract void SetMemberKey (string v);
     }
 
     sealed partial class RootContext : BaseContext
     {
-      Json value = JsonMissing.Value;
+      JsonValue value = JsonMissingValue.Value;
 
-      public override void Append(Json json)
+      public override void Append(JsonValue json)
       {
         Debug.Assert (!value.IsValid ());
         Debug.Assert (json != null);
         value = json;
       }
 
-      public override Json CreateJson()
+      public override JsonValue CreateJson()
       {
         Debug.Assert (value.IsValid ());
         return value;
@@ -476,17 +533,17 @@ namespace Noson
 
     sealed partial class ArrayContext : BaseContext
     {
-      readonly List<Json> value = new List<Json> (Common.DefaultSize);
+      readonly List<JsonValue> value = new List<JsonValue> (Common.DefaultSize);
 
-      public override void Append(Json json)
+      public override void Append(JsonValue json)
       {
         Debug.Assert (json != null);
         value.Add (json);
       }
 
-      public override Json CreateJson()
+      public override JsonValue CreateJson()
       {
-        return new JsonArray (value);
+        return new JsonArrayValue (value);
       }
 
       public override void SetMemberKey(string v)
@@ -497,19 +554,19 @@ namespace Noson
 
     sealed partial class ObjectContext : BaseContext
     {
-      readonly List<Tuple<string, Json>> value = new List<Tuple<string, Json>> (Common.DefaultSize);
+      readonly List<Tuple<string, JsonValue>> value = new List<Tuple<string, JsonValue>> (Common.DefaultSize);
       string memberKey = "";
 
-      public override void Append(Json json)
+      public override void Append(JsonValue json)
       {
         Debug.Assert (json != null);
         value.Add (Tuple.Create (memberKey, json));
         memberKey = "";
       }
 
-      public override Json CreateJson()
+      public override JsonValue CreateJson()
       {
-        return new JsonObject (value);
+        return new JsonObjectValue (value);
       }
 
       public override void SetMemberKey(string v)
@@ -545,7 +602,7 @@ namespace Noson
     }
 
     [MethodImpl (MethodImplOptions.AggressiveInlining)]
-    bool Append (Json json)
+    bool Append (JsonValue json)
     {
       Debug.Assert (contexts.Count > 0);
       var current = contexts.Peek ();
@@ -568,15 +625,15 @@ namespace Noson
     }
 
     [MethodImpl (MethodImplOptions.AggressiveInlining)]
-    bool SetMemberKey (StringBuilder v)
+    bool SetMemberKey (string v)
     {
       Debug.Assert (contexts.Count > 0);
       var current = contexts.Peek ();
-      current.SetMemberKey (v.ToString ());
+      current.SetMemberKey (v);
       return true;
     }
 
-    public Json Value
+    public JsonValue Value
     {
       get
       {
@@ -588,22 +645,27 @@ namespace Noson
 
     public bool NullValue ()
     {
-      return Append (JsonNull.Value);
+      return Append (JsonNullValue.Value);
     }
 
     public bool BoolValue (bool v)
     {
-      return Append (v ? JsonBool.True : JsonBool.False);
+      return Append (v ? JsonBooleanValue.True : JsonBooleanValue.False);
     }
 
     public bool NumberValue (double v)
     {
-      return Append (new JsonNumber (v));
+      return Append (new JsonNumberValue (v));
     }
 
     public bool StringValue (StringBuilder v)
     {
-      return Append (new JsonString (v.ToString ()));
+      return StringValue (v.ToString ());
+    }
+
+    public bool StringValue (string v)
+    {
+      return Append (new JsonStringValue (v));
     }
 
     public bool ArrayBegin ()
@@ -628,6 +690,11 @@ namespace Noson
 
     public bool MemberKey (StringBuilder v)
     {
+      return MemberKey (v.ToString ());
+    }
+
+    public bool MemberKey (string v)
+    {
       return SetMemberKey (v);
     }
 
@@ -644,30 +711,48 @@ namespace Noson
     }
   }
 
-  static partial class Tools
+  static partial class Json
   {
-    public static Json EmptyJson
+    public static JsonValue EmptyJson
     {
       get
       {
-        return JsonMissing.Value;
+        return JsonMissingValue.Value;
       }
     }
 
-    public static bool TryParse (string input, out Json json, out string message)
+    public static bool TryParse (
+        string        input
+      , bool          fullErrorInfo
+      , out int       pos
+      , out JsonValue json
+      , out string    message
+      )
     {
       var visitor = new JsonBuilderVisitor ();
       var parser  = new JsonParser (input, visitor);
       if (parser.TryParse ())
       {
         json    = visitor.Value;
+        pos     = parser.Position;
         message = "";
         return true;
       }
       else
       {
-        json    = JsonMissing.Value;
-        message = "TODO:";
+        json    = JsonMissingValue.Value;
+        pos     = parser.Position;
+        message = Common.ErrorPrelude;
+
+        if (fullErrorInfo)
+        {
+          var evisitor  = new ErrorWriter (parser.Position);
+          var eparser   = new JsonParser (input, evisitor);
+          var eresult   = eparser.TryParse ();
+          Debug.Assert (!eresult);
+          message = evisitor.Value;
+        }
+
         return false;
       }
     }

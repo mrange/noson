@@ -24,11 +24,16 @@ namespace Test
     static void Main(string[] args)
     {
       var input = @"{""d"":[1,2,3]}";
-      var json  = Tools.EmptyJson;
+      var json  = Json.EmptyJson;
+      var pos   = 0;
       var msg   = "";
 
-      if (Tools.TryParse (input, out json, out msg))
+      if (Json.TryParse (input, true, out pos, out json, out msg))
       {
+        var s = Json.ToString (json);
+
+        Console.WriteLine ("Json: {0}", s);
+
         dynamic a = json;
         dynamic d = a.d;
         var c = d.GetCount ();

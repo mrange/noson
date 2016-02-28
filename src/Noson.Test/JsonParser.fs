@@ -65,10 +65,10 @@ type JsonBuilderVisitor() =
     let d ()  = ab.ToArray () |> Json.Object
     push (rk, a, d)
 
-  let setMemberKey (v : StringBuilder) =
+  let setMemberKey (v : string) =
     context.Count > 0 |> Debug.Assert
     let rkey, _, _ = context.Peek ()
-    rkey := v.ToString ()
+    rkey := v
     true
 
   do
@@ -78,7 +78,7 @@ type JsonBuilderVisitor() =
     push (dummy, a, d) |> ignore
 
   member x.Value : Json =
-    context.Count = 1 |> Debug.Assert 
+    context.Count = 1 |> Debug.Assert
     let _, _, d = context.Peek ()
     d ()
 
@@ -88,19 +88,21 @@ type JsonBuilderVisitor() =
     let u = f unexpected
     e, u
 
-  interface IJsonParseVisitor with
-    member x.NullValue    ()        : bool = Json.Null |> add
-    member x.BoolValue    v         : bool = Json.Bool v |> add
-    member x.NumberValue  v         : bool = Json.Number v |> add
-    member x.StringValue  v         : bool = Json.String (v.ToString ()) |> add
-    member x.ArrayBegin   ()        : bool = pushArray ()
-    member x.ArrayEnd     ()        : bool = pop ()
-    member x.ObjectBegin  ()        : bool = pushObject ()
-    member x.ObjectEnd    ()        : bool = pop ()
-    member x.MemberKey    v         : bool = setMemberKey v
-    member x.ExpectedChar (pos, e)  : unit = expected.Add (pos, sprintf "'%c'" e)
-    member x.Expected     (pos, e)  : unit = expected.Add (pos, e)
-    member x.Unexpected   (pos, u)  : unit = unexpected.Add (pos, u)
+  interface IJsonVisitor with
+    member x.NullValue    ()                  : bool = Json.Null |> add
+    member x.BoolValue    v                   : bool = Json.Bool v |> add
+    member x.NumberValue  v                   : bool = Json.Number v |> add
+    member x.StringValue  (v : StringBuilder) : bool = Json.String (v.ToString ()) |> add
+    member x.StringValue  (v : string)        : bool = Json.String v |> add
+    member x.ArrayBegin   ()                  : bool = pushArray ()
+    member x.ArrayEnd     ()                  : bool = pop ()
+    member x.ObjectBegin  ()                  : bool = pushObject ()
+    member x.ObjectEnd    ()                  : bool = pop ()
+    member x.MemberKey    (v : StringBuilder) : bool = setMemberKey (v.ToString ())
+    member x.MemberKey    (v : string)        : bool = setMemberKey v
+    member x.ExpectedChar (pos, e)            : unit = expected.Add (pos, sprintf "'%c'" e)
+    member x.Expected     (pos, e)            : unit = expected.Add (pos, e)
+    member x.Unexpected   (pos, u)            : unit = unexpected.Add (pos, u)
 
 type ParseJsonResult =
   | Success of Json
@@ -120,7 +122,7 @@ let Roundtrip (json : string) : string option =
   let visitor = JsonWriter false
   let parser  = JsonParser (json, visitor)
   if parser.TryParse () then
-    visitor.Json |> Some
+    visitor.Value |> Some
   else
     None
-  
+
