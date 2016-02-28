@@ -400,7 +400,7 @@ namespace Noson
       while (!Test_Char (']'))
       {
         if (!(
-              TryParse_Delimiter(first)
+              TryParse_Delimiter (first)
           &&  TryParse_Value ())
           )
         {
@@ -432,7 +432,7 @@ namespace Noson
       while (!Test_Char ('}'))
       {
         if (!(
-              TryParse_Delimiter(first)
+              TryParse_Delimiter (first)
           &&  TryParse_MemberKey ()
           &&  Consume_WhiteSpace ()
           &&  TryConsume_Char (':')
@@ -784,13 +784,12 @@ namespace Noson
       public string   Key     = null;
     }
 
-    readonly bool           indent    ;
     readonly StringBuilder  json      = new StringBuilder (Common.DefaultSize);
     readonly Stack<Context> contexts  = new Stack<Context> (Common.DefaultSize);
 
     public JsonWriter (bool i)
     {
-      indent = i;
+      // TODO: Support indenting
       Push ();
     }
 
@@ -823,6 +822,7 @@ namespace Noson
       context.Key = key;
     }
 
+    [MethodImpl (MethodImplOptions.AggressiveInlining)]
     void Char (char ch)
     {
       //TODO: For what values do we escape with \u0000
@@ -921,20 +921,20 @@ namespace Noson
       return true;
     }
 
-    public bool NumberValue(double v)
+    public bool NumberValue (double v)
     {
       Value ();
       if (double.IsPositiveInfinity (v))
       {
-        json.AppendFormat ("1E309");  // Json doesn't support Infinity
+        json.AppendFormat (@"""Infinity""");  // Json doesn't support Infinity number literal
       }
       else if (double.IsNegativeInfinity (v))
       {
-        json.AppendFormat ("-1E309");  // Json doesn't support Infinity
+        json.AppendFormat (@"""-Infinity""");  // Json doesn't support -Infinity number literal
       }
       else if (double.IsNaN (v))
       {
-        json.AppendFormat ("0");  // Json doesn't support Nan
+        json.AppendFormat (@"""Nan""");  // Json doesn't support Nan number literal
       }
       else
       {
@@ -943,7 +943,7 @@ namespace Noson
       return true;
     }
 
-    public bool ObjectBegin()
+    public bool ObjectBegin ()
     {
       Value ();
       Push ();
@@ -951,14 +951,14 @@ namespace Noson
       return true;
     }
 
-    public bool ObjectEnd()
+    public bool ObjectEnd ()
     {
       json.Append ('}');
       Pop ();
       return true;
     }
 
-    public bool StringValue(StringBuilder v)
+    public bool StringValue (StringBuilder v)
     {
       Value ();
       json.Append ('"');
@@ -971,11 +971,14 @@ namespace Noson
       return true;
     }
 
-    public void Unexpected(int pos, string u)
+    public void Unexpected (int pos, string u)
     {
     }
   }
 
+  static partial class Tools
+  {
+  }
 }
 
 
