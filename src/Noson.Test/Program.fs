@@ -15,6 +15,9 @@
 // ----------------------------------------------------------------------------------------------
 open System.Collections.Generic
 open System.Diagnostics
+
+open FsCheck
+
 open Noson
 open Noson.Test
 open Noson.Test.Common
@@ -50,11 +53,63 @@ let testNegativeTestCases () =
     | Failure (p, _, e, u) ->
       ()
 
+type ParseProperties() =
+  static let precheck (wj : WhitespacedJson) =
+    true
+
+  static member ``can parse json document`` wj =
+    precheck wj ==> fun () ->
+      let json      = ToString wj
+      let expected  = Strip wj
+      match ParseJson json with
+      | Success actual ->
+        let result = expected = actual
+        if not result then
+          errorf "Failed equality property %A: %A <> %A" json expected actual
+        result
+      | Failure (p, _, e, u) ->
+        errorf "Failed parsing %A: Pos: %d, Expected: %A, Unexpected: %A" json p e u
+        false
+
+
+let testParseProperties () =
+  highlight "testParseProperties"
+
+  let runner =
+    { new IRunner with
+      member __.OnStartFixture t =
+        highlight (Runner.onStartFixtureToString t)
+      member __.OnArguments (ntest, args, every) =
+        // info (every ntest args)
+        ()
+      member __.OnShrink(args, everyShrink) =
+        // warning (everyShrink args)
+        ()
+      member __.OnFinished(name,testResult) =
+        let isTrue = match testResult with | TestResult.True _ -> true | _ -> false
+        if isTrue then
+          success (Runner.onFinishedToString name testResult)
+        else
+          error (Runner.onFinishedToString name testResult)
+    }
+
+  let config =
+    {
+      Config.Quick with
+        MaxTest = 1000
+        MaxFail = 10000
+        Runner  = runner
+    }
+
+  Check.All<ParseProperties> config
+
+
 [<EntryPoint>]
 let main argv =
   try
     testPositiveTestCases ()
     testNegativeTestCases ()
+    testParseProperties   ()
 
     if errors = 0 then
       success "All tests completed successfully"

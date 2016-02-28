@@ -209,7 +209,18 @@ namespace Noson
     [MethodImpl (MethodImplOptions.AggressiveInlining)]
     static bool IsWhiteSpace (char c)
     {
-      return c == ' ' || c == '\t' || c == '\n' || c == '\r';
+      switch (c)
+      {
+        case '\b':
+        case '\f':
+        case '\n':
+        case '\r':
+        case '\t':
+        case ' ':
+          return true;
+        default:
+          return false;
+      }
     }
 
     [MethodImpl (MethodImplOptions.AggressiveInlining)]
