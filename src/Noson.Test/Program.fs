@@ -75,6 +75,44 @@ type ParseProperties() =
         errorf "Failed parsing %A: Pos: %d, Expected: %A, Unexpected: %A" json p e u
         false
 
+  static member ``dynamic json document is equivalent to input`` wj =
+    precheck wj ==> fun () ->
+      let json                  = ToString wj
+      let expected              = ToJson wj
+      let result, pos, dyn, msg = Json.TryParse (json, true)
+      if result then
+        let visitor = JsonBuilderVisitor ()
+        dyn.Apply visitor
+        let actual = visitor.Value
+        let result = expected = actual
+        if not result then
+          errorf "Failed equality property %A: %A <> %A" json expected actual
+        result
+      else
+        errorf "Failed parsing %A: Pos: %d, Message: %A" json pos msg
+        false
+
+  static member ``parsing + writing generates equivalent json document`` wj =
+    precheck wj ==> fun () ->
+      let json                  = ToString wj
+      let expected              = ToJson wj
+      let visitor = JsonWriter (false)
+      let parser  = JsonParser (json, visitor)
+      let result = parser.TryParse ()
+      if result then
+        let written = visitor.Value
+        match ParseJson written with
+        | Success actual ->
+          let result = expected = actual
+          if not result then
+            errorf "Failed equality property %A: %A <> %A" json expected actual
+          result
+        | Failure (p, _, e, u) ->
+          errorf "Failed parsing %A: Pos: %d, Expected: %A, Unexpected: %A" json p e u
+          false
+      else
+        errorf "Failed parsing %A: Pos: %d" json parser.Position
+        false
 
 let testParseProperties () =
   highlight "testParseProperties"
@@ -100,7 +138,11 @@ let testParseProperties () =
   let config =
     {
       Config.Quick with
+#if DEBUG
+        MaxTest = 100
+#else
         MaxTest = 1000
+#endif
         MaxFail = 10000
         Runner  = runner
     }

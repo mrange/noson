@@ -57,7 +57,8 @@ type Whitespaces = (Whitespace [])*(Whitespace [])
 type WhitespacedJsonValue =
   | Null    of Whitespaces
   | Bool    of Whitespaces*bool
-//  | Number  of Whitespaces*float
+// TODO: Currently struggles with a couple of corner cases wrt to floats.
+//  | Number  of Whitespaces*float  
   | String  of Whitespaces*string
   | Array   of Whitespaces*(WhitespacedJsonValue [])
   | Object  of Whitespaces*((Whitespaces*string*WhitespacedJsonValue) [])
