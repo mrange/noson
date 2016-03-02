@@ -15,6 +15,8 @@
 // ----------------------------------------------------------------------------------------------
 open System.Collections.Generic
 open System.Diagnostics
+open System.IO
+open System.Reflection
 
 open FsCheck
 
@@ -26,7 +28,9 @@ open Noson.Test.JsonParser
 let testPositiveTestCases () =
   highlight "testPositiveTestCases"
 
-  for json in TestCases.positiveTestCases do
+  let allPositiveTestCases = Array.append TestCases.positiveTestCases TestCases.embeddedPositiveTestCases.Value
+
+  for name, json in TestCases.positiveTestCases do
     let expected  = ReferenceParser.ParseJson json
     let actual    = ParseJson json
     let roundtrip = Roundtrip json
@@ -36,16 +40,16 @@ let testPositiveTestCases () =
       | Success prt when e = prt ->
         ()
       | _ ->
-        errorf "Expected and roundtrip result doesn't match for %A and roundtrip %A" json roundtrip
+        errorf "Expected and roundtrip result doesn't match for %A" name
     | _ , Success _, _ ->
-      errorf "Expected and actual parse result doesn't match for %A: %A <> %A" json expected actual
+      errorf "Expected and actual parse result doesn't match for %A" name
     | _ , Failure (p, _, e, u), _ ->
-      errorf "Failed parsing %A: Pos: %d, Expected: %A, Unexpected: %A" json p e u
+      errorf "Failed parsing for %A: Pos: %d, Expected: %A, Unexpected: %A" name p e u
 
 let testNegativeTestCases () =
   highlight "testNegativeTestCases"
 
-  for json in TestCases.negativeTestCases do
+  for name, json in TestCases.negativeTestCases do
     let result = ParseJson json
     match result with
     | Success _ ->
@@ -60,7 +64,7 @@ type ParseProperties() =
   static member ``can parse json document`` wj =
     precheck wj ==> fun () ->
       let json      = ToString wj
-      let expected  = Strip wj
+      let expected  = ToJson wj
       match ParseJson json with
       | Success actual ->
         let result = expected = actual

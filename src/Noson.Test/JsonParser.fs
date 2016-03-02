@@ -23,6 +23,16 @@ open System.Text
 
 open Noson
 
+let (|IsNan|IsPositiveInf|IsNegativeInf|IsZero|IsNormal|) v =
+  let max = Double.MaxValue / 8.0
+  let min = Double.MinValue / 8.0
+  let eps = Double.Epsilon * 2.0
+  if Double.IsPositiveInfinity v || v > max       then IsPositiveInf
+  else if Double.IsNegativeInfinity v || v < min  then IsNegativeInf
+  else if Double.IsNaN v                          then IsNan
+  else if abs v < eps                             then IsZero
+  else IsNormal v
+
 [<RequireQualifiedAccess>]
 type Json =
   | Null
@@ -47,7 +57,7 @@ type Whitespaces = (Whitespace [])*(Whitespace [])
 type WhitespacedJsonValue =
   | Null    of Whitespaces
   | Bool    of Whitespaces*bool
-  | Number  of Whitespaces*float
+//  | Number  of Whitespaces*float
   | String  of Whitespaces*string
   | Array   of Whitespaces*(WhitespacedJsonValue [])
   | Object  of Whitespaces*((Whitespaces*string*WhitespacedJsonValue) [])
@@ -146,12 +156,12 @@ let NonPrintableChars =
   [|
     for i in 0..31 ->
       match char i with
-      | '\b'            -> @"\b"
-      | '\f'            -> @"\f"
-      | '\n'            -> @"\n"
-      | '\r'            -> @"\r"
-      | '\t'            -> @"\t"
-      | ch              -> sprintf "\u%04X" i
+      | '\b'  -> @"\b"
+      | '\f'  -> @"\f"
+      | '\n'  -> @"\n"
+      | '\r'  -> @"\r"
+      | '\t'  -> @"\t"
+      | ch    -> sprintf "\u%04X" i
   |]
 
 // FsCheck generates null string values
@@ -201,16 +211,16 @@ let ToString (json : WhitespacedJson) : string =
     ws post
 
   let rec loop = function
-    | WhitespacedJsonValue.Null    ws                -> wstr ws "null"
-    | WhitespacedJsonValue.Bool    (ws, true)        -> wstr ws "true"
-    | WhitespacedJsonValue.Bool    (ws, false)       -> wstr ws "false"
-    | WhitespacedJsonValue.Number  (ws, v)           ->
-      if Double.IsInfinity v              then wstr ws @"""Infinity"""
-      else if Double.IsNegativeInfinity v then wstr ws @"""-Infinity"""
-      else if Double.IsNaN v              then wstr ws @"""NaN"""
-      else wstr ws (v.ToString ("g", CultureInfo.InvariantCulture))
-    | WhitespacedJsonValue.String  (ws, v)           -> estr ws v
-    | WhitespacedJsonValue.Array   ((pre, post), vs) ->
+    | WhitespacedJsonValue.Null    ws                 -> wstr ws "null"
+    | WhitespacedJsonValue.Bool    (ws, true)         -> wstr ws "true"
+    | WhitespacedJsonValue.Bool    (ws, false)        -> wstr ws "false"
+//    | WhitespacedJsonValue.Number  (ws, IsNan)        -> wstr ws @"""NaN"""
+//    | WhitespacedJsonValue.Number  (ws, IsPositiveInf)-> wstr ws @"""Infinity"""
+//    | WhitespacedJsonValue.Number  (ws, IsNegativeInf)-> wstr ws @"""-Infinity"""
+//    | WhitespacedJsonValue.Number  (ws, IsZero)       -> wstr ws @"0"
+//    | WhitespacedJsonValue.Number  (ws, IsNormal v)   -> wstr ws (v.ToString ("g", CultureInfo.InvariantCulture))
+    | WhitespacedJsonValue.String  (ws, v)            -> estr ws v
+    | WhitespacedJsonValue.Array   ((pre, post), vs)  ->
       ws pre
       ch '['
       let mutable prelude = ""
@@ -220,7 +230,7 @@ let ToString (json : WhitespacedJson) : string =
         loop v
       ch ']'
       ws post
-    | WhitespacedJsonValue.Object  ((pre, post), vs)          ->
+    | WhitespacedJsonValue.Object  ((pre, post), vs)  ->
       ws pre
       ch '{'
       let mutable prelude = ""
@@ -256,20 +266,33 @@ let Roundtrip (json : string) : string option =
   else
     None
 
-let rec Strip (json : WhitespacedJson) : Json =
+let ToJson (json : WhitespacedJson) : Json =
   let rec loop = function
-    | WhitespacedJsonValue.Null    _       -> Json.Null
-    | WhitespacedJsonValue.Bool    (_, v)  -> Json.Bool v
-    | WhitespacedJsonValue.Number  (_, v)  ->
-      // Not supported by Json
-      if Double.IsInfinity v              then Json.String @"Infinity"
-      else if Double.IsNegativeInfinity v then Json.String @"-Infinity"
-      else if Double.IsNaN v              then Json.String @"NaN"
-      else Json.Number v
-    | WhitespacedJsonValue.String  (_, v)  -> Json.String (Coerce v)
-    | WhitespacedJsonValue.Array   (_, vs) ->
+    | WhitespacedJsonValue.Null    _                  -> Json.Null
+    | WhitespacedJsonValue.Bool    (_, v)             -> Json.Bool v
+//    | WhitespacedJsonValue.Number  (_, IsNan)         -> Json.String @"NaN"
+//    | WhitespacedJsonValue.Number  (_, IsPositiveInf) -> Json.String @"Infinity"
+//    | WhitespacedJsonValue.Number  (_, IsNegativeInf) -> Json.String @"-Infinity"
+//    | WhitespacedJsonValue.Number  (_, IsZero)        -> Json.Number 0.
+//    | WhitespacedJsonValue.Number  (_, IsNormal v)    -> Json.Number v
+    | WhitespacedJsonValue.String  (_, v)             -> Json.String (Coerce v)
+    | WhitespacedJsonValue.Array   (_, vs)            ->
       [| for v in vs -> loop v |] |> Json.Array
-    | WhitespacedJsonValue.Object  (_, vs) ->
+    | WhitespacedJsonValue.Object  (_, vs)            ->
       [| for (_, k, v) in vs -> Coerce k, loop v |] |> Json.Object
   let jsonValue = ToJsonValue json
   loop jsonValue
+
+(*
+let IsEqual (left : Json) (right : Json) : bool =
+  let rec loop = function
+    | (Json.Null      , Json.Null)                                  -> true
+    | (Json.Bool l    , Json.Bool r)                                -> l = r
+    | (Json.Number l  , Json.Number r)                              -> l = r
+    | (Json.Array ls  , Json.Array rs) when ls.Length = rs.Length   ->
+      Array.exists2 (fun l r -> loop (l, r) |> not) ls rs |> not
+    | (Json.Object ls  , Json.Object rs) when ls.Length = rs.Length ->
+      Array.exists2 (fun (lk,l) (rk,r) -> lk = rk && loop (l, r) |> not) ls rs |> not
+  loop (left, right)
+
+*)

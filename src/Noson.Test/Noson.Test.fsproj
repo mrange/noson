@@ -60,8 +60,31 @@
     <Compile Include="ReferenceParser.fs" />
     <Compile Include="TestCases.fs" />
     <Compile Include="Program.fs" />
-    <None Include="App.config" />
-    <Content Include="packages.config" />
+    <None Include="App.config">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <Content Include="packages.config">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <EmbeddedResource Include="TestCases/charrefs.json" />
+    <EmbeddedResource Include="TestCases/charrefs-full.json" />
+    <EmbeddedResource Include="TestCases/contacts.json" />
+    <EmbeddedResource Include="TestCases/Dates.json" />
+    <EmbeddedResource Include="TestCases/DoubleNested.json" />
+    <EmbeddedResource Include="TestCases/Empty.json" />
+    <EmbeddedResource Include="TestCases/GitHub.json" />
+    <EmbeddedResource Include="TestCases/Nested.json" />
+    <EmbeddedResource Include="TestCases/optionals.json" />
+    <EmbeddedResource Include="TestCases/OptionValues.json" />
+    <EmbeddedResource Include="TestCases/projects.json" />
+    <EmbeddedResource Include="TestCases/reddit.json" />
+    <EmbeddedResource Include="TestCases/Simple.json" />
+    <EmbeddedResource Include="TestCases/SimpleArray.json" />
+    <EmbeddedResource Include="TestCases/topic.json" />
+    <EmbeddedResource Include="TestCases/TypeInference.json" />
+    <EmbeddedResource Include="TestCases/WikiData.json" />
+    <EmbeddedResource Include="TestCases/Vindinium.json" />
+    <EmbeddedResource Include="TestCases/WorldBank.json" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="FParsec">

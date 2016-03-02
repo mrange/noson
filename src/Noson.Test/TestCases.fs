@@ -16,6 +16,8 @@
 module Noson.Test.TestCases
 
 open System
+open System.IO
+open System.Reflection
 
 let positiveTestCases =
   [|
@@ -54,7 +56,10 @@ let positiveTestCases =
     """[1E-324]"""
     """[1E+309]"""
     """[-1E309]"""
-  |]
+    """[1.797693135e+308]"""
+    """[-1.797693135e+308]"""
+    """[4.940656458e-324]"""
+  |] |> Array.map (fun v -> "Positive:" + v, v)
 
 let negativeTestCases =
   [|
@@ -99,4 +104,16 @@ let negativeTestCases =
     """[-"""
     """[1.0"""
     """[nul]"""
-  |]
+  |] |> Array.map (fun v -> "Negative:" + v, v)
+
+let embeddedPositiveTestCases =
+  lazy
+    let a = Assembly.GetExecutingAssembly ()
+    a.GetManifestResourceNames ()
+    |> Seq.filter (fun nm -> nm.EndsWith ".json")
+    |> Seq.map (fun nm -> 
+        use s   = a.GetManifestResourceStream nm
+        use tr  = new StreamReader (s)
+        "Positive:" + nm, tr.ReadToEnd ()
+      )
+    |> Seq.toArray
