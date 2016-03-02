@@ -94,11 +94,11 @@ type ParseProperties() =
 
   static member ``parsing + writing generates equivalent json document`` wj =
     precheck wj ==> fun () ->
-      let json                  = ToString wj
-      let expected              = ToJson wj
-      let visitor = JsonWriter (false)
-      let parser  = JsonParser (json, visitor)
-      let result = parser.TryParse ()
+      let json      = ToString wj
+      let expected  = ToJson wj
+      let visitor   = JsonWriter (false)
+      let parser    = JsonParser (json, visitor)
+      let result    = parser.TryParse ()
       if result then
         let written = visitor.Value
         match ParseJson written with
